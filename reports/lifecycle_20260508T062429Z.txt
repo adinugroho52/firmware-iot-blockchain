@@ -1,0 +1,203 @@
+================================================================
+ Firmware Lifecycle Simulation + Benchmark
+ Started : 2026-05-08T06:24:29Z
+ Host    : Ryutara (aarch64)
+ Venv    : /home/ryutara/venv
+ Report  : ./reports/lifecycle_20260508T062429Z.txt
+ Metrics : ./reports/lifecycle_20260508T062429Z_metrics.csv
+================================================================
+
+▶ Pre-flight checks
+  Gateway          : http://192.168.10.228:8000
+  ESP32 port       : /dev/ttyUSB0
+  Device ID        : esp32-bench-01
+  Firmware source  : ./esp32_firmware/main.py
+  Initial version  : 3.1.0
+  Iterations       : 10
+  Action delay     : 15s
+  Between delay    : 15s
+  Latency samples  : 100 (sequential)
+  Throughput conc. : 50 (parallel)
+  ✓ Gateway reachable
+
+════════════════════════════════════════════════════════════════
+ ITERATION 1 / 10  —  version 3.1.0
+════════════════════════════════════════════════════════════════
+
+▶ [1.a] Hash genuine firmware and register on-chain
+  SHA-256: 41c9df2735bade783502dcce895d7f6e26c119329f3485a87daa4d7587265752
+  ✓ Registered (tx: 1ee9e2993713d9aec7…)
+
+▶ [1.b] Flash genuine firmware to ESP32
+  Uploading iter1_genuine.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [1.c] Tamper with firmware and flash
+  Tampered SHA-256: 6633d1d6204d93a7a459595af6f5f8bcf8c6435a96f64f563f6201d273f38b3e
+  Uploading iter1_tampered.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [1.d] Recovery: re-register genuine hash on-chain
+  ✓ Re-registered (tx: d0958cedc07df220b0…)
+
+▶ [1.e] Re-flash genuine firmware to ESP32
+  Uploading iter1_genuine.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [1.f] Revoke device
+  ✓ Revoked (tx: 332082c09ba28c2652…)
+
+▶ [1.g1] Sequential verify latency (100 samples)
+  ✓ mean=1535.69ms  p50=1499ms  p95=1516ms
+
+▶ [1.g2] Parallel verify throughput (50 concurrent)
+  ✓ throughput=11.83 req/s  (wallclock 4226ms for 50 reqs)
+
+▶ [1.h] Sample CPU/RAM
+  ✓ Pi: cpu=0.00%  ram=1216MB / 4049MB
+  ✓ ESP32: free heap = 110256 bytes
+  Sleeping 15s before next iteration…
+
+════════════════════════════════════════════════════════════════
+ ITERATION 2 / 10  —  version 3.1.1
+════════════════════════════════════════════════════════════════
+
+▶ [2.a] Hash genuine firmware and register on-chain
+  SHA-256: 41c9df2735bade783502dcce895d7f6e26c119329f3485a87daa4d7587265752
+  ✓ Registered (tx: 57dc5e9d4cbdf9f3f7…)
+
+▶ [2.b] Flash genuine firmware to ESP32
+  Uploading iter2_genuine.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [2.c] Tamper with firmware and flash
+  Tampered SHA-256: 850ca09a5ceae9c27f7680ce13169a82d250a85f6b654f9a1dae276d413a6900
+  Uploading iter2_tampered.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [2.d] Recovery: re-register genuine hash on-chain
+  ✓ Re-registered (tx: cd3354d2f80462eb1d…)
+
+▶ [2.e] Re-flash genuine firmware to ESP32
+  Uploading iter2_genuine.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [2.f] Revoke device
+  ✓ Revoked (tx: a699cfcc2a5480575a…)
+
+▶ [2.g1] Sequential verify latency (100 samples)
+  ✓ mean=1526.55ms  p50=1525ms  p95=1536ms
+
+▶ [2.g2] Parallel verify throughput (50 concurrent)
+  ✓ throughput=12.78 req/s  (wallclock 3912ms for 50 reqs)
+
+▶ [2.h] Sample CPU/RAM
+  ✓ Pi: cpu=0.00%  ram=1207MB / 4049MB
+  ✓ ESP32: free heap = 110256 bytes
+  Sleeping 15s before next iteration…
+
+════════════════════════════════════════════════════════════════
+ ITERATION 3 / 10  —  version 3.1.2
+════════════════════════════════════════════════════════════════
+
+▶ [3.a] Hash genuine firmware and register on-chain
+  SHA-256: 41c9df2735bade783502dcce895d7f6e26c119329f3485a87daa4d7587265752
+  ✓ Registered (tx: 11f4c9667917811435…)
+
+▶ [3.b] Flash genuine firmware to ESP32
+  Uploading iter3_genuine.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [3.c] Tamper with firmware and flash
+  Tampered SHA-256: db85f488980ea42cd269d7858e965b207463be7bbb0c5cf2f6ec58aa44b23b71
+  Uploading iter3_tampered.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [3.d] Recovery: re-register genuine hash on-chain
+  ✓ Re-registered (tx: 16692c61053c9bd070…)
+
+▶ [3.e] Re-flash genuine firmware to ESP32
+  Uploading iter3_genuine.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [3.f] Revoke device
+  ✓ Revoked (tx: d5e51384e7259d60c3…)
+
+▶ [3.g1] Sequential verify latency (100 samples)
+  ✓ mean=1598.71ms  p50=1590ms  p95=1607ms
+
+▶ [3.g2] Parallel verify throughput (50 concurrent)
+  ✓ throughput=12.71 req/s  (wallclock 3934ms for 50 reqs)
+
+▶ [3.h] Sample CPU/RAM
+  ✓ Pi: cpu=0.00%  ram=1212MB / 4049MB
+  ✓ ESP32: free heap = 110256 bytes
+  Sleeping 15s before next iteration…
+
+════════════════════════════════════════════════════════════════
+ ITERATION 4 / 10  —  version 3.1.3
+════════════════════════════════════════════════════════════════
+
+▶ [4.a] Hash genuine firmware and register on-chain
+  SHA-256: 41c9df2735bade783502dcce895d7f6e26c119329f3485a87daa4d7587265752
+  ✓ Registered (tx: db3625c287e113d350…)
+
+▶ [4.b] Flash genuine firmware to ESP32
+  Uploading iter4_genuine.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [4.c] Tamper with firmware and flash
+  Tampered SHA-256: 47afe54638d37a7c10c8b92411f04ec3b6204043e5961efcdcaeb0076fa82b69
+  Uploading iter4_tampered.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [4.d] Recovery: re-register genuine hash on-chain
+  ✓ Re-registered (tx: d74996097298decdd4…)
+
+▶ [4.e] Re-flash genuine firmware to ESP32
+  Uploading iter4_genuine.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [4.f] Revoke device
+  ✓ Revoked (tx: 9d7c5a653092e033f7…)
+
+▶ [4.g1] Sequential verify latency (100 samples)
+  ✓ mean=1600.26ms  p50=1580ms  p95=1594ms
+
+▶ [4.g2] Parallel verify throughput (50 concurrent)
+  ✓ throughput=12.73 req/s  (wallclock 3929ms for 50 reqs)
+
+▶ [4.h] Sample CPU/RAM
+  ✓ Pi: cpu=0.50%  ram=1209MB / 4049MB
+  ✓ ESP32: free heap = 110256 bytes
+  Sleeping 15s before next iteration…
+
+════════════════════════════════════════════════════════════════
+ ITERATION 5 / 10  —  version 3.1.4
+════════════════════════════════════════════════════════════════
+
+▶ [5.a] Hash genuine firmware and register on-chain
+  SHA-256: 41c9df2735bade783502dcce895d7f6e26c119329f3485a87daa4d7587265752
+  ✓ Registered (tx: 3b892763fa78ae529e…)
+
+▶ [5.b] Flash genuine firmware to ESP32
+  Uploading iter5_genuine.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [5.c] Tamper with firmware and flash
+  Tampered SHA-256: b4a932026e3ec9dff877c50407409e65327ac92ffd32b3dd0c21fffec1a3d7e6
+  Uploading iter5_tampered.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [5.d] Recovery: re-register genuine hash on-chain
+  ✓ Re-registered (tx: 47af8bd2c8743b462d…)
+
+▶ [5.e] Re-flash genuine firmware to ESP32
+  Uploading iter5_genuine.py -> :/main.py
+  Soft-resetting ESP32
+
+▶ [5.f] Revoke device
+  ✓ Revoked (tx: 51ae0ae79c88f75fd5…)
+
+▶ [5.g1] Sequential verify latency (100 samples)
+  ✓ mean=1547.74ms  p50=1547ms

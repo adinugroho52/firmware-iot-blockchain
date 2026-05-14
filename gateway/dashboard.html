@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Firmware Integrity Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg:       #0a0c0f;
+    --bg1:      #10141a;
+    --bg2:      #161c26;
+    --bg3:      #1d2535;
+    --border:   #252f42;
+    --border2:  #2e3d57;
+    --text:     #c8d8f0;
+    --text2:    #7a94b8;
+    --text3:    #4a5e7a;
+    --accent:   #3b82f6;
+    --accent2:  #60a5fa;
+    --ok:       #22c55e;
+    --ok-bg:    #052e16;
+    --warn:     #f59e0b;
+    --warn-bg:  #2d1900;
+    --err:      #ef4444;
+    --err-bg:   #2d0707;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'Space Grotesk', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none; z-index: 9999;
+  }
+
+  .shell { display: flex; min-height: 100vh; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 220px; flex-shrink: 0;
+    background: var(--bg1);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    position: fixed; top: 0; left: 0; bottom: 0;
+  }
+  .logo { padding: 24px 20px 20px; border-bottom: 1px solid var(--border); }
+  .logo-mark { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .logo-icon {
+    width: 32px; height: 32px; background: var(--accent); flex-shrink: 0;
+    clip-path: polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+    display: grid; place-items: center;
+  }
+  .logo-icon svg { width: 16px; height: 16px; }
+  .logo-title { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
+  .logo-sub { font-family: var(--mono); font-size: 10px; color: var(--text3); letter-spacing: 0.04em; }
+
+  /* Gateway URL bar — lives in sidebar so it's always accessible */
+  .gw-bar { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .gw-label { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
+  .gw-input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border2);
+    color: var(--text); font-family: var(--mono); font-size: 11px;
+    padding: 6px 9px; border-radius: 5px; outline: none;
+    transition: border-color 0.15s;
+  }
+  .gw-input:focus { border-color: var(--accent); }
+
+  .nav { padding: 12px; flex: 1; }
+  .nav-label { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.12em; padding: 0 8px 8px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px;
+    cursor: pointer; color: var(--text2);
+    font-size: 13px; font-weight: 400;
+    transition: all 0.15s; margin-bottom: 2px;
+    border: 1px solid transparent;
+  }
+  .nav-item:hover { background: var(--bg2); color: var(--text); }
+  .nav-item.active { background: var(--bg3); color: var(--accent2); border-color: var(--border); }
+  .nav-item svg { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.7; }
+  .nav-item.active svg { opacity: 1; }
+
+  .sidebar-footer {
+    padding: 14px 20px; border-top: 1px solid var(--border);
+    font-family: var(--mono); font-size: 10px; color: var(--text3);
+  }
+  .chain-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ok); display: inline-block; margin-right: 6px;
+    box-shadow: 0 0 6px var(--ok); animation: pulse 2s infinite;
+  }
+  .chain-dot.offline { background: var(--err); box-shadow: 0 0 6px var(--err); animation: none; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── Main ── */
+  .main { margin-left: 220px; flex: 1; display: flex; flex-direction: column; }
+
+  .topbar {
+    height: 54px; padding: 0 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg1);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .page-title { font-size: 15px; font-weight: 500; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .refresh-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 6px;
+    background: transparent; border: 1px solid var(--border2);
+    color: var(--text2); cursor: pointer; font-family: var(--sans);
+    font-size: 12px; font-weight: 500; transition: all 0.15s;
+  }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent2); }
+  .refresh-btn svg { width: 13px; height: 13px; }
+  .refresh-btn.spinning svg { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .timestamp { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+
+  /* ── Content ── */
+  .content { padding: 24px 28px; flex: 1; }
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* ── Stat grid ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+  .stat-card { background: var(--bg1); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; }
+  .stat-label { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px; }
+  .stat-value { font-size: 28px; font-weight: 600; color: var(--text); line-height: 1; }
+  .stat-value.ok { color: var(--ok); }
+  .stat-value.err { color: var(--err); }
+  .stat-sub { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 6px; }
+
+  /* ── Panels & tables ── */
+  .panel { background: var(--bg1); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+  .panel-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.1em; }
+  .panel-badge { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 10px 18px; font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 1px solid var(--border); font-weight: 400; }
+  td { padding: 12px 18px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg2); }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 4px; font-family: var(--mono); font-size: 11px; font-weight: 500; }
+  .badge.ok   { background: var(--ok-bg);   color: var(--ok);   border: 1px solid rgba(34,197,94,0.3); }
+  .badge.err  { background: var(--err-bg);  color: var(--err);  border: 1px solid rgba(239,68,68,0.3); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid rgba(245,158,11,0.3); }
+  .badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+  .hash-cell { font-family: var(--mono); font-size: 11px; color: var(--text3); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .device-id { font-family: var(--mono); font-size: 12px; color: var(--accent2); }
+  .ver-tag   { font-family: var(--mono); font-size: 11px; color: var(--text2); }
+
+  .action-btn { background: transparent; border: 1px solid var(--border2); color: var(--text2); padding: 5px 10px; border-radius: 5px; cursor: pointer; font-family: var(--sans); font-size: 11px; font-weight: 500; transition: all 0.15s; margin-right: 4px; }
+  .action-btn:hover { border-color: var(--accent); color: var(--accent2); }
+  .action-btn.danger:hover { border-color: var(--err); color: var(--err); }
+
+  /* ── Audit log ── */
+  .log-row { display: flex; align-items: flex-start; gap: 16px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
+  .log-row:last-child { border-bottom: none; }
+  .log-ts { font-family: var(--mono); font-size: 10px; color: var(--text3); white-space: nowrap; padding-top: 2px; min-width: 130px; }
+  .log-event { font-family: var(--mono); font-size: 11px; font-weight: 500; }
+  .log-event.boot_verify { color: var(--accent2); }
+  .log-event.ota_registered { color: var(--ok); }
+  .log-event.api_register { color: var(--warn); }
+  .log-event.api_revoke, .log-event.ota_register_error { color: var(--err); }
+  .log-device { font-size: 12px; color: var(--text2); }
+  .log-hash { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+  /* ── Forms ── */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 7px; }
+  .form-group.full { grid-column: 1 / -1; }
+  label { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; }
+  input, select {
+    background: var(--bg); border: 1px solid var(--border2);
+    color: var(--text); font-family: var(--mono); font-size: 12px;
+    padding: 9px 12px; border-radius: 6px; outline: none; transition: border-color 0.15s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--text3); }
+
+  .file-input-wrap { background: var(--bg); border: 1px dashed var(--border2); border-radius: 6px; padding: 20px; text-align: center; cursor: pointer; transition: border-color 0.15s; }
+  .file-input-wrap:hover { border-color: var(--accent); }
+  .file-input-wrap input[type=file] { display: none; }
+  .file-label { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+  .file-name  { font-family: var(--mono); font-size: 11px; color: var(--accent2); margin-top: 6px; }
+
+  .hash-preview { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; font-family: var(--mono); font-size: 11px; color: var(--ok); word-break: break-all; min-height: 38px; }
+  .hash-preview.pending { color: var(--text3); }
+  .hash-preview.error   { color: var(--err); }
+
+  .submit-btn { background: var(--accent); border: none; color: #fff; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-family: var(--sans); font-size: 13px; font-weight: 600; transition: all 0.15s; margin-top: 8px; }
+  .submit-btn:hover { background: var(--accent2); }
+  .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* SubtleCrypto warning banner */
+  .crypto-warn { display: none; background: var(--warn-bg); border: 1px solid rgba(245,158,11,0.4); border-radius: 6px; padding: 10px 14px; font-family: var(--mono); font-size: 11px; color: var(--warn); margin-bottom: 14px; line-height: 1.6; }
+
+  /* ── Verify result ── */
+  .verify-result { margin-top: 16px; padding: 16px 18px; border-radius: 8px; display: none; font-family: var(--mono); font-size: 12px; }
+  .verify-result.ok  { background: var(--ok-bg);  border: 1px solid rgba(34,197,94,0.3); color: var(--ok); }
+  .verify-result.err { background: var(--err-bg); border: 1px solid rgba(239,68,68,0.3); color: var(--err); }
+
+  /* ── Toast ── */
+  .toast-area { position: fixed; bottom: 24px; right: 24px; z-index: 9000; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: var(--bg2); border: 1px solid var(--border2); border-radius: 8px; padding: 12px 16px; font-family: var(--mono); font-size: 11px; max-width: 380px; animation: slideIn 0.2s ease; display: flex; gap: 10px; align-items: flex-start; }
+  .toast.ok  { border-color: rgba(34,197,94,0.4); }
+  .toast.err { border-color: rgba(239,68,68,0.4); }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .empty { padding: 48px; text-align: center; color: var(--text3); font-family: var(--mono); font-size: 12px; }
+  .tx-link { font-family: var(--mono); font-size: 10px; color: var(--accent2); text-decoration: none; }
+  .tx-link:hover { text-decoration: underline; }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Sidebar ── -->
+  <nav class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M12 2l9 4.5v9L12 20l-9-4.5v-9L12 2z"/><path d="M12 20v-9M12 2v9M3 6.5l9 4.5 9-4.5"/></svg>
+        </div>
+        <span class="logo-title">FirmChain</span>
+      </div>
+      <div class="logo-sub">IoT Integrity Dashboard</div>
+    </div>
+
+    <!-- Single gateway URL input — shared across all pages -->
+    <div class="gw-bar">
+      <div class="gw-label">Gateway URL</div>
+      <input class="gw-input" id="gwUrl"
+             placeholder="http://192.168.10.229:8000"
+             oninput="saveGwUrl()"
+             onblur="refreshAll()" />
+    </div>
+
+    <div class="nav">
+      <div class="nav-label">Monitor</div>
+      <div class="nav-item active" data-section="overview" onclick="showSection('overview',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Overview
+      </div>
+      <div class="nav-item" data-section="devices" onclick="showSection('devices',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M8 6V4M16 6V4M4 10h16"/></svg>
+        Devices
+      </div>
+      <div class="nav-item" data-section="audit" onclick="showSection('audit',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6M9 16h6M9 8h6M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/></svg>
+        Audit Log
+      </div>
+      <div class="nav-label" style="margin-top:16px">Manage</div>
+      <div class="nav-item" data-section="register" onclick="showSection('register',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Register Firmware
+      </div>
+      <div class="nav-item" data-section="verify" onclick="showSection('verify',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4M12 3a9 9 0 100 18 9 9 0 000-18z"/></svg>
+        Verify Hash
+      </div>
+      <div class="nav-item" data-section="admin" onclick="showSection('admin',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+        Admin
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div><span class="chain-dot offline" id="chainDot"></span><span id="chainStatus">Not connected</span></div>
+      <div style="margin-top:4px">Block <span id="blockNum">—</span></div>
+      <div style="margin-top:4px">Sepolia Testnet</div>
+    </div>
+  </nav>
+
+  <!-- ── Main ── -->
+  <div class="main">
+    <div class="topbar">
+      <span class="page-title" id="pageTitle">Overview</span>
+      <div class="topbar-right">
+        <span class="timestamp" id="lastUpdate">Never synced</span>
+        <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- Overview -->
+      <div class="section active" id="sec-overview">
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Devices</div>
+            <div class="stat-value" id="statTotal">—</div>
+            <div class="stat-sub">registered on-chain</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Verified OK</div>
+            <div class="stat-value ok" id="statOk">—</div>
+            <div class="stat-sub">last boot check</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Violations</div>
+            <div class="stat-value err" id="statErr">—</div>
+            <div class="stat-sub">hash mismatch</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Latest Block</div>
+            <div class="stat-value" id="statBlock" style="font-size:20px">—</div>
+            <div class="stat-sub">Sepolia</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Device Status</span>
+            <span class="panel-badge" id="devBadge">0 devices</span>
+          </div>
+          <table>
+            <thead><tr><th>Device ID</th><th>Version</th><th>Integrity</th><th>Hash (on-chain)</th><th>Registered</th></tr></thead>
+            <tbody id="overviewTable"><tr><td colspan="5" class="empty">Enter gateway URL and click Refresh</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Recent Activity</span>
+            <span class="panel-badge">last 10 events</span>
+          </div>
+          <div id="recentLog"><div class="empty">Enter gateway URL and click Refresh</div></div>
+        </div>
+      </div>
+
+      <!-- Devices -->
+      <div class="section" id="sec-devices">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">All Devices</span>
+            <span class="panel-badge" id="allDevBadge">0 devices</span>
+          </div>
+          <table>
+            <thead><tr><th>Device ID</th><th>Version</th><th>Status</th><th>Hash</th><th>Registered</th><th>Actions</th></tr></thead>
+            <tbody id="devicesTable"><tr><td colspan="6" class="empty">Enter gateway URL and click Refresh</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Audit Log -->
+      <div class="section" id="sec-audit">
+        <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;">
+          <input id="filterDevice" placeholder="Filter by device ID…" style="width:220px" oninput="filterAudit()" />
+          <select id="filterEvent" onchange="filterAudit()" style="width:180px">
+            <option value="">All events</option>
+            <option value="boot_verify">Boot verify</option>
+            <option value="ota_registered">OTA registered</option>
+            <option value="api_register">API register</option>
+            <option value="api_revoke">Revoked</option>
+          </select>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text3)" id="auditCount"></span>
+        </div>
+        <div class="panel">
+          <div id="auditLog"><div class="empty">Enter gateway URL and click Refresh</div></div>
+        </div>
+      </div>
+
+      <!-- Register Firmware -->
+      <div class="section" id="sec-register">
+        <div class="panel" style="max-width:640px">
+          <div class="panel-header"><span class="panel-title">Register Firmware Hash</span></div>
+          <div style="padding:20px">
+            <!-- Shown when SubtleCrypto is unavailable (non-HTTPS non-localhost) -->
+            <div class="crypto-warn" id="cryptoWarn">
+              ⚠ SHA-256 hashing requires a secure context.<br>
+              Open this dashboard via <strong>http://localhost:8000</strong> (or enable HTTPS) to hash files in the browser.<br>
+              Alternatively, compute the hash on the command line:<br>
+              <code style="color:var(--text)">sha256sum main.py</code> &nbsp;or&nbsp; <code style="color:var(--text)">python -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" main.py</code>
+              <br>Then paste the 64-char hex into the hash field below.
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Device ID</label>
+                <input id="regDeviceId" placeholder="esp32-lab-01" />
+              </div>
+              <div class="form-group">
+                <label>Version</label>
+                <input id="regVersion" placeholder="1.0.0" />
+              </div>
+              <div class="form-group full">
+                <label>Firmware File <span id="fileHashLabel">(SHA-256 computed in browser)</span></label>
+                <div class="file-input-wrap" id="fileWrap" onclick="document.getElementById('regFile').click()">
+                  <input type="file" id="regFile" onchange="handleFileSelect(event)" />
+                  <div class="file-label" id="fileDropLabel">Click to select firmware file (.py, .mpy, .bin)</div>
+                  <div class="file-name" id="regFileName"></div>
+                </div>
+              </div>
+              <div class="form-group full">
+                <label>SHA-256 Hash (auto-filled from file, or paste manually)</label>
+                <input id="regHash" placeholder="64-char hex string…" style="font-family:var(--mono);font-size:11px" oninput="onRegHashInput()" />
+              </div>
+            </div>
+            <button class="submit-btn" id="regBtn" onclick="submitRegister()" disabled>Register on Blockchain</button>
+            <div id="regResult" style="margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--text3)"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Verify Hash -->
+      <div class="section" id="sec-verify">
+        <div class="panel" style="max-width:640px">
+          <div class="panel-header"><span class="panel-title">Verify Firmware Hash</span></div>
+          <div style="padding:20px">
+            <div class="crypto-warn" id="cryptoWarn2">
+              ⚠ SHA-256 hashing requires a secure context.<br>
+              Open via <strong>http://localhost:8000</strong> to hash files in the browser, or paste the hash manually below.
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Device ID</label>
+                <input id="verDeviceId" placeholder="esp32-lab-01" />
+              </div>
+              <div class="form-group full">
+                <label>Firmware File — or paste hash below</label>
+                <div class="file-input-wrap" onclick="document.getElementById('verFile').click()">
+                  <input type="file" id="verFile" onchange="handleVerifyFile(event)" />
+                  <div class="file-label">Click to select firmware file</div>
+                  <div class="file-name" id="verFileName"></div>
+                </div>
+              </div>
+              <div class="form-group full">
+                <label>SHA-256 Hash</label>
+                <input id="verHash" placeholder="64-char hex string…" style="font-family:var(--mono);font-size:11px" />
+              </div>
+            </div>
+            <button class="submit-btn" onclick="submitVerify()">Verify Against Blockchain</button>
+            <div class="verify-result" id="verifyResult"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin -->
+      <div class="section" id="sec-admin">
+        <div class="panel" style="max-width:560px">
+          <div class="panel-header"><span class="panel-title">Transaction Health</span></div>
+          <div style="padding:20px">
+            <div id="nonceInfo" style="font-family:var(--mono);font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.9">
+              Click "Check" to fetch current nonce status.
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="action-btn" onclick="checkNonce()">Check pending nonce</button>
+              <button class="action-btn danger" id="cancelBtn" onclick="cancelPending()" disabled>Cancel stuck transactions</button>
+            </div>
+            <div id="cancelResult" style="margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--text3)"></div>
+          </div>
+        </div>
+        <div class="panel" style="max-width:560px;margin-top:0">
+          <div class="panel-header"><span class="panel-title">How to fix "replacement transaction underpriced"</span></div>
+          <div style="padding:16px 18px;font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.9">
+            This error means a previous transaction is stuck in the mempool at the same nonce.<br>
+            The gateway now auto-retries with a 15% gas price bump on each attempt.<br><br>
+            If transactions are still failing:<br>
+            1. Click <strong style="color:var(--text)">Check pending nonce</strong> — if "stuck count" &gt; 0, proceed to step 2.<br>
+            2. Click <strong style="color:var(--text)">Cancel stuck transactions</strong> — sends zero-value self-transfers to flush the mempool.<br>
+            3. Wait ~30 s for cancellations to confirm, then retry your original action.<br><br>
+            <span style="color:var(--text3)">Alternatively on the command line:<br>
+            curl -X POST <span id="cancelUrl">http://&lt;gateway&gt;:8000</span>/admin/cancel-pending</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<div class="toast-area" id="toastArea"></div>
+
+<script>
+// ── Gateway URL — single source of truth ──────────────────────────────────────
+// Stored in localStorage so it persists across page reloads.
+// All API calls read from this one place; there are no per-page URL inputs.
+
+const LS_KEY = 'firmchain_gw_url';
+
+function loadGwUrl() {
+  const saved = localStorage.getItem(LS_KEY);
+  // Auto-detect: if opened via the gateway itself, use window.location.origin
+  const auto  = (location.hostname !== 'localhost' && location.port)
+    ? location.origin          // e.g. http://192.168.10.229:8000
+    : 'http://localhost:8000';
+  const val   = saved || auto;
+  document.getElementById('gwUrl').value = val;
+  return val;
+}
+
+function saveGwUrl() {
+  const val = document.getElementById('gwUrl').value.trim().replace(/\/$/, '');
+  localStorage.setItem(LS_KEY, val);
+}
+
+function GW() {
+  return document.getElementById('gwUrl').value.trim().replace(/\/$/, '');
+}
+
+// ── SubtleCrypto availability check ──────────────────────────────────────────
+// crypto.subtle is only available in secure contexts (HTTPS or localhost).
+// Over plain HTTP to a LAN IP the browser nulls it out.
+const hasCrypto = typeof crypto !== 'undefined' && crypto.subtle != null;
+
+function initCryptoWarnings() {
+  if (!hasCrypto) {
+    document.getElementById('cryptoWarn').style.display  = 'block';
+    document.getElementById('cryptoWarn2').style.display = 'block';
+    document.getElementById('fileWrap').style.opacity    = '0.4';
+    document.getElementById('fileWrap').style.pointerEvents = 'none';
+    document.getElementById('fileHashLabel').textContent = '(unavailable over HTTP — paste hash below)';
+    document.getElementById('fileDropLabel').textContent = 'File hashing unavailable (non-HTTPS context)';
+    // File select on verify page similarly
+    document.querySelectorAll('[onclick*="verFile"]').forEach(el => {
+      el.style.opacity = '0.4';
+      el.style.pointerEvents = 'none';
+    });
+  }
+}
+
+// ── Nav ───────────────────────────────────────────────────────────────────────
+const PAGE_TITLES = { overview:'Overview', devices:'Devices', audit:'Audit Log', register:'Register Firmware', verify:'Verify Hash', admin:'Admin' };
+
+function showSection(id, el) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + id).classList.add('active');
+  el.classList.add('active');
+  document.getElementById('pageTitle').textContent = PAGE_TITLES[id];
+}
+
+// ── API helper ────────────────────────────────────────────────────────────────
+async function apiFetch(path, opts) {
+  const url = GW() + path;
+  const r   = await fetch(url, opts);
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let allAudit = [];
+
+// ── Health ────────────────────────────────────────────────────────────────────
+async function fetchHealth() {
+  try {
+    const d = await apiFetch('/health');
+    document.getElementById('chainDot').className   = 'chain-dot';
+    document.getElementById('chainStatus').textContent = 'Connected';
+    const b = d.latest_block.toLocaleString();
+    document.getElementById('blockNum').textContent  = b;
+    document.getElementById('statBlock').textContent = b;
+  } catch {
+    document.getElementById('chainDot').className   = 'chain-dot offline';
+    document.getElementById('chainStatus').textContent = 'Offline';
+  }
+}
+
+// ── Audit ─────────────────────────────────────────────────────────────────────
+async function fetchAudit() {
+  try {
+    const data = await apiFetch('/audit?limit=200');
+    allAudit = data;
+    renderAudit(data);
+    renderRecentLog(data.slice(0, 10));
+    computeStats(data);
+    await buildDeviceTables(data);
+  } catch (e) {
+    const msg = `<div class="empty">Cannot reach gateway at <strong>${GW()}</strong><br>${e.message}</div>`;
+    ['auditLog','recentLog'].forEach(id => document.getElementById(id).innerHTML = msg);
+    ['overviewTable','devicesTable'].forEach(id =>
+      document.getElementById(id).innerHTML = `<tr><td colspan="6" class="empty">Cannot reach gateway — check URL in sidebar</td></tr>`
+    );
+  }
+}
+
+function fmtTs(unix) {
+  if (!unix) return '—';
+  return new Date(unix * 1000).toISOString().replace('T',' ').slice(0,19);
+}
+
+function renderAudit(rows) {
+  document.getElementById('auditCount').textContent = rows.length + ' events';
+  if (!rows.length) { document.getElementById('auditLog').innerHTML = '<div class="empty">No events yet</div>'; return; }
+  document.getElementById('auditLog').innerHTML = rows.map(r => `
+    <div class="log-row">
+      <span class="log-ts">${fmtTs(r.ts)}</span>
+      <div style="flex:1">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span class="log-event ${r.event}">${r.event}</span>
+          <span class="log-device">${r.device_id}</span>
+          ${r.chain_valid !== null && r.chain_valid !== undefined ? `<span class="badge ${r.chain_valid ? 'ok':'err'}">${r.chain_valid ? 'VERIFIED':'FAILED'}</span>` : ''}
+          ${r.version ? `<span class="ver-tag">v${r.version}</span>` : ''}
+        </div>
+        ${r.fw_hash ? `<div class="log-hash">${r.fw_hash}</div>` : ''}
+        ${r.tx_hash ? `<div class="log-hash">tx: <a class="tx-link" href="https://sepolia.etherscan.io/tx/${r.tx_hash}" target="_blank">${r.tx_hash.slice(0,24)}…</a></div>` : ''}
+        ${r.notes   ? `<div class="log-hash" style="color:var(--err)">${r.notes}</div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function renderRecentLog(rows) {
+  if (!rows.length) { document.getElementById('recentLog').innerHTML = '<div class="empty">No events yet</div>'; return; }
+  document.getElementById('recentLog').innerHTML = rows.map(r => `
+    <div class="log-row">
+      <span class="log-ts">${fmtTs(r.ts)}</span>
+      <div style="flex:1">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span class="log-event ${r.event}">${r.event}</span>
+          <span class="log-device">${r.device_id}</span>
+          ${r.chain_valid !== null && r.chain_valid !== undefined ? `<span class="badge ${r.chain_valid ? 'ok':'err'}">${r.chain_valid ? 'VERIFIED':'FAILED'}</span>` : ''}
+        </div>
+        ${r.fw_hash ? `<div class="log-hash">${r.fw_hash.slice(0,40)}…</div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function computeStats(rows) {
+  const boots = rows.filter(r => r.event === 'boot_verify');
+  document.getElementById('statOk').textContent  = boots.filter(r => r.chain_valid === 1).length;
+  document.getElementById('statErr').textContent = boots.filter(r => r.chain_valid === 0).length;
+}
+
+async function buildDeviceTables(auditRows) {
+  const ids = [...new Set(auditRows.map(r => r.device_id).filter(Boolean))];
+  document.getElementById('statTotal').textContent    = ids.length;
+  document.getElementById('devBadge').textContent     = ids.length + ' device' + (ids.length !== 1 ? 's':'');
+  document.getElementById('allDevBadge').textContent  = ids.length + ' device' + (ids.length !== 1 ? 's':'');
+
+  if (!ids.length) {
+    ['overviewTable','devicesTable'].forEach(id =>
+      document.getElementById(id).innerHTML = '<tr><td colspan="6" class="empty">No registered devices</td></tr>'
+    );
+    return;
+  }
+
+  const records = await Promise.allSettled(
+    ids.map(id => apiFetch(`/firmware/record?device_id=${encodeURIComponent(id)}`))
+  );
+
+  const overRows = [], devRows = [];
+  ids.forEach((id, i) => {
+    const rec     = records[i].status === 'fulfilled' ? records[i].value : null;
+    const hash    = rec?.hash    || '—';
+    const ver     = rec?.version || '—';
+    const ts      = rec?.timestamp ? fmtTs(rec.timestamp) : '—';
+    const revoked = rec?.revoked;
+    const lastBoot = auditRows.find(r => r.device_id === id && r.event === 'boot_verify');
+    const valid    = lastBoot ? lastBoot.chain_valid : null;
+    const badge    = revoked
+      ? `<span class="badge warn">REVOKED</span>`
+      : valid === 1 ? `<span class="badge ok">VERIFIED</span>`
+      : valid === 0 ? `<span class="badge err">TAMPERED</span>`
+      : `<span class="badge warn">PENDING</span>`;
+
+    overRows.push(`<tr>
+      <td class="device-id">${id}</td>
+      <td class="ver-tag">${ver}</td>
+      <td>${badge}</td>
+      <td><span class="hash-cell" title="${hash}">${hash !== '—' ? hash.slice(0,16)+'…' : '—'}</span></td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--text3)">${ts}</td>
+    </tr>`);
+    devRows.push(`<tr>
+      <td class="device-id">${id}</td>
+      <td class="ver-tag">${ver}</td>
+      <td>${badge}</td>
+      <td><span class="hash-cell" title="${hash}">${hash !== '—' ? hash : '—'}</span></td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--text3)">${ts}</td>
+      <td>
+        <button class="action-btn" onclick="quickVerify('${id}')">Verify</button>
+        <button class="action-btn danger" onclick="revokeDevice('${id}')">Revoke</button>
+      </td>
+    </tr>`);
+  });
+
+  document.getElementById('overviewTable').innerHTML = overRows.join('') || '<tr><td colspan="5" class="empty">No devices</td></tr>';
+  document.getElementById('devicesTable').innerHTML  = devRows.join('')  || '<tr><td colspan="6" class="empty">No devices</td></tr>';
+}
+
+// ── Audit filter ──────────────────────────────────────────────────────────────
+function filterAudit() {
+  const dev = document.getElementById('filterDevice').value.toLowerCase();
+  const evt = document.getElementById('filterEvent').value;
+  renderAudit(allAudit.filter(r =>
+    (!dev || r.device_id?.toLowerCase().includes(dev)) &&
+    (!evt || r.event === evt)
+  ));
+}
+
+// ── SHA-256 hashing (browser SubtleCrypto) ────────────────────────────────────
+// Falls back gracefully when crypto.subtle is unavailable (non-HTTPS LAN).
+async function sha256File(file) {
+  if (!hasCrypto) throw new Error('crypto.subtle unavailable (requires HTTPS or localhost)');
+  const buf = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function handleFileSelect(e) {
+  const f = e.target.files[0]; if (!f) return;
+  document.getElementById('regFileName').textContent = f.name;
+  document.getElementById('regHash').value = 'Computing…';
+  try {
+    const h = await sha256File(f);
+    document.getElementById('regHash').value = h;
+    document.getElementById('regBtn').disabled = false;
+  } catch (err) {
+    document.getElementById('regHash').value = '';
+    toast(err.message, 'err');
+  }
+}
+
+async function handleVerifyFile(e) {
+  const f = e.target.files[0]; if (!f) return;
+  document.getElementById('verFileName').textContent = f.name;
+  document.getElementById('verHash').value = 'Computing…';
+  try {
+    document.getElementById('verHash').value = await sha256File(f);
+  } catch (err) {
+    document.getElementById('verHash').value = '';
+    toast(err.message, 'err');
+  }
+}
+
+// Enable register button when hash is pasted manually
+function onRegHashInput() {
+  const v = document.getElementById('regHash').value.trim();
+  document.getElementById('regBtn').disabled = v.length !== 64;
+}
+
+// ── Register ──────────────────────────────────────────────────────────────────
+async function submitRegister() {
+  const deviceId = document.getElementById('regDeviceId').value.trim();
+  const version  = document.getElementById('regVersion').value.trim();
+  const fwHash   = document.getElementById('regHash').value.trim();
+  if (!deviceId || !version) { toast('Fill in Device ID and Version.', 'err'); return; }
+  if (fwHash.length !== 64)  { toast('Hash must be exactly 64 hex characters.', 'err'); return; }
+  document.getElementById('regBtn').disabled = true;
+  document.getElementById('regResult').textContent = 'Submitting transaction…';
+  try {
+    const d = await apiFetch('/firmware/register', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({device_id: deviceId, fw_hash: fwHash, version})
+    });
+    document.getElementById('regResult').innerHTML =
+      `✓ Registered! tx: <a class="tx-link" href="https://sepolia.etherscan.io/tx/${d.tx_hash}" target="_blank">${d.tx_hash.slice(0,24)}…</a>`;
+    toast('Firmware hash registered on-chain.', 'ok');
+    refreshAll();
+  } catch(e) {
+    document.getElementById('regResult').textContent = 'Error: ' + e.message;
+    toast('Registration failed: ' + e.message, 'err');
+  } finally {
+    document.getElementById('regBtn').disabled = false;
+  }
+}
+
+// ── Verify ────────────────────────────────────────────────────────────────────
+async function submitVerify() {
+  const deviceId = document.getElementById('verDeviceId').value.trim();
+  const fwHash   = document.getElementById('verHash').value.trim();
+  if (!deviceId)         { toast('Enter a Device ID.', 'err'); return; }
+  if (fwHash.length !== 64) { toast('Hash must be exactly 64 hex characters.', 'err'); return; }
+  const el = document.getElementById('verifyResult');
+  el.style.display = 'none';
+  try {
+    const d = await apiFetch(`/firmware/verify?device_id=${encodeURIComponent(deviceId)}&fw_hash=${fwHash}`);
+    el.style.display = 'block';
+    el.className = 'verify-result ' + (d.valid ? 'ok' : 'err');
+    el.innerHTML = d.valid
+      ? `✓ VERIFIED — hash matches on-chain record<br>Device: ${deviceId} | Version: ${d.record?.version||'—'} | Registered: ${fmtTs(d.record?.timestamp)}`
+      : `✗ FAILED — hash does NOT match on-chain record for ${deviceId}<br>On-chain hash: ${(d.record?.hash||'').slice(0,32)||'(none)'}…<br>Revoked: ${d.record?.revoked ? 'Yes':'No'}`;
+  } catch(e) {
+    el.style.display = 'block'; el.className = 'verify-result err';
+    el.textContent = 'Error: ' + e.message;
+  }
+}
+
+function quickVerify(deviceId) {
+  showSection('verify', document.querySelector('[data-section=verify]'));
+  document.getElementById('verDeviceId').value = deviceId;
+}
+
+// ── Revoke ────────────────────────────────────────────────────────────────────
+async function revokeDevice(deviceId) {
+  if (!confirm(`Revoke firmware record for ${deviceId}?\nThis marks it as untrusted on-chain and cannot be undone.`)) return;
+  try {
+    const d = await apiFetch('/firmware/revoke', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({device_id: deviceId})
+    });
+    toast(`${deviceId} revoked. tx: ${d.tx_hash.slice(0,14)}…`, 'ok');
+    refreshAll();
+  } catch(e) {
+    toast('Revoke failed: ' + e.message, 'err');
+  }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type='ok') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span style="color:${type==='ok'?'var(--ok)':'var(--err)'}">${type==='ok'?'✓':'✗'}</span><span>${msg}</span>`;
+  document.getElementById('toastArea').appendChild(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+// ── Refresh ───────────────────────────────────────────────────────────────────
+async function refreshAll() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  await Promise.all([fetchHealth(), fetchAudit()]);
+  btn.classList.remove('spinning');
+  document.getElementById('lastUpdate').textContent = 'Synced ' + new Date().toLocaleTimeString();
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+async function checkNonce() {
+  try {
+    const d = await apiFetch('/admin/pending-nonce');
+    const stuck = d.stuck_count;
+    document.getElementById('nonceInfo').innerHTML =
+      `Address    : <span style="color:var(--accent2)">${d.address}</span><br>` +
+      `Nonce (latest)  : ${d.nonce_latest}<br>` +
+      `Nonce (pending) : ${d.nonce_pending}<br>` +
+      `Stuck in mempool: <span style="color:${stuck > 0 ? 'var(--err)' : 'var(--ok)'}">${stuck}</span><br>` +
+      `Gas price  : ${d.gas_price_gwei} Gwei`;
+    document.getElementById('cancelBtn').disabled = stuck === 0;
+    document.getElementById('cancelUrl').textContent = GW();
+  } catch(e) {
+    document.getElementById('nonceInfo').textContent = 'Error: ' + e.message;
+  }
+}
+
+async function cancelPending() {
+  if (!confirm('Send cancellation transactions to flush the mempool?\nThis uses a small amount of Sepolia ETH for gas.')) return;
+  document.getElementById('cancelBtn').disabled = true;
+  document.getElementById('cancelResult').textContent = 'Submitting cancellations…';
+  try {
+    const d = await apiFetch('/admin/cancel-pending', { method: 'POST' });
+    document.getElementById('cancelResult').textContent =
+      `✓ ${d.cancelled} transaction(s) cancelled. Wait ~30 s then retry.`;
+    toast(`Cancelled ${d.cancelled} stuck tx(s).`, 'ok');
+    setTimeout(checkNonce, 5000);
+  } catch(e) {
+    document.getElementById('cancelResult').textContent = 'Error: ' + e.message;
+    toast('Cancel failed: ' + e.message, 'err');
+    document.getElementById('cancelBtn').disabled = false;
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadGwUrl();
+initCryptoWarnings();
+refreshAll();
+setInterval(refreshAll, 30000);
+</script>
+</body>
+</html>

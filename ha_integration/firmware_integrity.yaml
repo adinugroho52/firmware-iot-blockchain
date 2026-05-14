@@ -1,0 +1,131 @@
+# /config/packages/firmware_integrity.yaml
+#
+# HA Package — all firmware-blockchain-iot entities in one self-contained file.
+# Packages are immune to duplicate top-level key problems because HA merges
+# them into the main config automatically.
+#
+# SETUP (one-time):
+#   1. Create the directory:  /config/packages/
+#   2. Copy this file there:  /config/packages/firmware_integrity.yaml
+#   3. Add ONE line to /config/configuration.yaml if not already present:
+#        homeassistant:
+#          packages: !include_dir_named packages
+#   4. Check Configuration, then Restart HA.
+#
+# Replace 192.168.1.1 with your Raspberry Pi gateway IP.
+
+# ── REST sensors ──────────────────────────────────────────────────────────────
+sensor:
+  - platform: rest
+    name: "ESP32 Lab-01 Firmware Record"
+    unique_id: esp32_lab01_fw_record
+    resource: "http://192.168.1.1:8000/firmware/record?device_id=esp32-lab-01"
+    scan_interval: 300
+    value_template: "{{ value_json.version }}"
+    json_attributes:
+      - hash
+      - timestamp
+      - revoked
+
+  - platform: rest
+    name: "Gateway Health"
+    unique_id: fw_gateway_health
+    resource: "http://192.168.1.1:8000/health"
+    scan_interval: 60
+    value_template: "{{ value_json.status }}"
+    json_attributes:
+      - latest_block
+
+# ── MQTT sensors ──────────────────────────────────────────────────────────────
+mqtt:
+  sensor:
+    - name: "ESP32 Lab-01 Firmware Valid"
+      unique_id: esp32_lab01_fw_valid
+      state_topic: "iot/verify_result"
+      value_template: >-
+        {% if value_json.device_id == 'esp32-lab-01' %}
+          {{ 'OK' if value_json.valid else 'TAMPERED' }}
+        {% else %}
+          {{ states(entity_id) }}
+        {% endif %}
+      icon: mdi:shield-check
+      # Replay the retained message immediately on HA restart instead of
+      # waiting for the next ESP32 boot event.
+      force_update: true
+      # Mark the sensor unavailable if no message arrives within 24 hours
+      # (covers the case where the ESP32 is powered off for an extended period).
+      expire_after: 86400
+
+    - name: "ESP32 Lab-01 Temperature"
+      unique_id: esp32_lab01_temp
+      state_topic: "iot/sensors"
+      value_template: >-
+        {% if value_json.device_id == 'esp32-lab-01' %}
+          {{ value_json.temperature }}
+        {% else %}
+          {{ states(entity_id) }}
+        {% endif %}
+      unit_of_measurement: "°C"
+      device_class: temperature
+
+    - name: "ESP32 Lab-01 Humidity"
+      unique_id: esp32_lab01_hum
+      state_topic: "iot/sensors"
+      value_template: >-
+        {% if value_json.device_id == 'esp32-lab-01' %}
+          {{ value_json.humidity }}
+        {% else %}
+          {{ states(entity_id) }}
+        {% endif %}
+      unit_of_measurement: "%"
+      device_class: humidity
+
+# ── Template binary sensor ────────────────────────────────────────────────────
+# Name "ESP32 Lab-01 Integrity OK" slugifies to:
+#   binary_sensor.esp32_lab_01_integrity_ok
+template:
+  - binary_sensor:
+      - name: "ESP32 Lab-01 Integrity OK"
+        unique_id: esp32_lab01_integrity_ok
+        device_class: safety
+        state: >-
+          {{ states('sensor.esp32_lab_01_firmware_valid') == 'OK' }}
+        icon: >-
+          {% if states('sensor.esp32_lab_01_firmware_valid') == 'OK' %}
+            mdi:shield-check
+          {% else %}
+            mdi:shield-alert
+          {% endif %}
+        availability: >-
+          {{ states('sensor.esp32_lab_01_firmware_valid') not in ['unknown', 'unavailable'] }}
+
+# ── Automations ───────────────────────────────────────────────────────────────
+automation:
+  - id: fw_integrity_alert
+    alias: "Alert: ESP32 Firmware Integrity Failure"
+    trigger:
+      - platform: state
+        entity_id: sensor.esp32_lab_01_firmware_valid
+        to: "TAMPERED"
+    condition: []
+    action:
+      - action: notify.persistent_notification
+        data:
+          title: "⚠️ Firmware Integrity Violation"
+          message: >-
+            Device esp32-lab-01 reported a firmware hash that does NOT match
+            the on-chain record. Possible tampering detected at
+            {{ now().strftime('%Y-%m-%d %H:%M:%S') }}.
+
+  - id: fw_integrity_ok
+    alias: "Info: ESP32 Firmware Integrity Restored"
+    trigger:
+      - platform: state
+        entity_id: sensor.esp32_lab_01_firmware_valid
+        to: "OK"
+    condition: []
+    action:
+      - action: notify.persistent_notification
+        data:
+          title: "✅ Firmware Integrity Verified"
+          message: "esp32-lab-01 passed blockchain verification."

@@ -1,0 +1,131 @@
+# ─── Home Assistant Integration ──────────────────────────────────────────────
+# firmware-blockchain-iot / ha_integration/configuration.yaml
+#
+# Tested against Home Assistant 2026.x.
+# Add these snippets to your existing configuration.yaml.
+#
+# Replace 192.168.1.1 with your Raspberry Pi gateway IP throughout.
+# MQTT must already be configured under Settings → Integrations → MQTT.
+
+# ── 1. REST sensors — pull firmware record from gateway ───────────────────────
+sensor:
+  - platform: rest
+    name: "ESP32 Lab-01 Firmware Record"
+    unique_id: esp32_lab01_fw_record
+    resource: "http://192.168.1.1:8000/firmware/record?device_id=esp32-lab-01"
+    scan_interval: 300
+    value_template: "{{ value_json.version }}"
+    json_attributes:
+      - hash
+      - timestamp
+      - revoked
+
+  - platform: rest
+    name: "Gateway Health"
+    unique_id: fw_gateway_health
+    resource: "http://192.168.1.1:8000/health"
+    scan_interval: 60
+    value_template: "{{ value_json.status }}"
+    json_attributes:
+      - latest_block
+
+# ── 2. MQTT sensors — live verification results from gateway ──────────────────
+mqtt:
+  sensor:
+    - name: "ESP32 Lab-01 Firmware Valid"
+      unique_id: esp32_lab01_fw_valid
+      state_topic: "iot/verify_result"
+      value_template: >-
+        {% if value_json.device_id == 'esp32-lab-01' %}
+          {{ 'OK' if value_json.valid else 'TAMPERED' }}
+        {% else %}
+          {{ states(entity_id) }}
+        {% endif %}
+      icon: mdi:shield-check
+
+    - name: "ESP32 Lab-01 Temperature"
+      unique_id: esp32_lab01_temp
+      state_topic: "iot/sensors"
+      value_template: >-
+        {% if value_json.device_id == 'esp32-lab-01' %}
+          {{ value_json.temperature }}
+        {% else %}
+          {{ states(entity_id) }}
+        {% endif %}
+      unit_of_measurement: "°C"
+      device_class: temperature
+
+    - name: "ESP32 Lab-01 Humidity"
+      unique_id: esp32_lab01_hum
+      state_topic: "iot/sensors"
+      value_template: >-
+        {% if value_json.device_id == 'esp32-lab-01' %}
+          {{ value_json.humidity }}
+        {% else %}
+          {{ states(entity_id) }}
+        {% endif %}
+      unit_of_measurement: "%"
+      device_class: humidity
+
+# ── 3. Template entities ──────────────────────────────────────────────────────
+#
+# The old `binary_sensor: - platform: template` syntax is removed in HA 2026.6.
+# All template-derived entities must now live under the top-level `template:` key.
+# Ref: https://www.home-assistant.io/integrations/template/
+# ─────────────────────────────────────────────────────────────────────────────
+template:
+  - binary_sensor:
+      - name: "ESP32 Lab-01 Integrity OK"
+        # Entity ID resolves to: binary_sensor.esp32_lab_01_integrity_ok
+        # HA slugifies name: spaces→underscore, lowercase, special chars stripped.
+        # Changing unique_id alone does NOT change the entity ID — the name drives it.
+        unique_id: esp32_lab01_integrity_ok
+        device_class: safety
+        state: >-
+          {{ states('sensor.esp32_lab_01_firmware_valid') == 'OK' }}
+        icon: >-
+          {% if states('sensor.esp32_lab_01_firmware_valid') == 'OK' %}
+            mdi:shield-check
+          {% else %}
+            mdi:shield-alert
+          {% endif %}
+        # Stays unavailable until the MQTT sensor has received its first value
+        availability: >-
+          {{ states('sensor.esp32_lab_01_firmware_valid') not in ['unknown', 'unavailable'] }}
+
+# ── 4. Automations ────────────────────────────────────────────────────────────
+automation:
+  - id: fw_integrity_alert
+    alias: "Alert: ESP32 Firmware Integrity Failure"
+    description: "Notify when blockchain detects firmware tampering"
+    trigger:
+      - platform: state
+        entity_id: sensor.esp32_lab_01_firmware_valid
+        to: "TAMPERED"
+    condition: []
+    action:
+      - action: notify.persistent_notification
+        data:
+          title: "⚠️ Firmware Integrity Violation"
+          message: >-
+            Device esp32-lab-01 reported a firmware hash that does NOT match
+            the on-chain record. Possible tampering detected at
+            {{ now().strftime('%Y-%m-%d %H:%M:%S') }}.
+      # Optional — uncomment to also send a mobile push notification:
+      # - action: notify.mobile_app_your_phone
+      #   data:
+      #     title: "🚨 Firmware Tamper Alert"
+      #     message: "esp32-lab-01 integrity check FAILED."
+
+  - id: fw_integrity_ok
+    alias: "Info: ESP32 Firmware Integrity Restored"
+    trigger:
+      - platform: state
+        entity_id: sensor.esp32_lab_01_firmware_valid
+        to: "OK"
+    condition: []
+    action:
+      - action: notify.persistent_notification
+        data:
+          title: "✅ Firmware Integrity Verified"
+          message: "esp32-lab-01 passed blockchain verification."
