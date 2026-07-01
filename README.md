@@ -12,7 +12,7 @@ proof-of-concept into a real deployment.
 ## Architecture
 
 ```
-┌─────────────────────┐        MQTT         ┌──────────────────────────────────┐
+┌──────────────────── ─┐        MQTT         ┌──────────────────────────────────┐
 │   ESP32 (MicroPy)   │ ──── iot/sensors ──► │    Raspberry Pi 5 Gateway        │
 │                     │ ── iot/integrity ──► │                                  │
 │  • DHT22 sensor     │ ◄─ iot/verify_result │  Mosquitto MQTT broker           │
@@ -54,10 +54,10 @@ firmware-blockchain-iot/
 │   ├── firmware_integrity.yaml     # HA package file (recommended — drop in /config/packages/)
 │   └── configuration.yaml          # Reference snippets if not using packages
 └── scripts/
-    ├── deploy_contract.py          # Compile + deploy via Foundry/forge (ARM64-native)
+    ├── deploy_contract.py          # Compile + deploy via Foundry/forge (ARM64-nae)
     ├── register_firmware.py        # Hash firmware file → POST to gateway API
     ├── flash_esp32.sh              # esptool erase+flash + mpremote upload
-    └── setup_gateway.sh            # Full Pi setup: Mosquitto, venv, systemd, Foundry
+    └── setup_gateway.sh            # Full Pi setup: Mosquitto, venv, systemd, Foundry (system-wide)
 ```
 
 ---
@@ -77,7 +77,7 @@ firmware-blockchain-iot/
 ### Step 1 — Raspberry Pi: run setup
 
 ```bash
-git clone <this-repo> firmware-blockchain-iot
+git clone https://github.com/adinugroho52/firmware-blockchain-iot
 cd firmware-blockchain-iot
 sudo bash scripts/setup_gateway.sh
 ```
@@ -88,17 +88,20 @@ Edit the generated env file — fill in `INFURA_URL` and `PRIVATE_KEY`:
 sudo nano /opt/firmware-gateway/.env
 ```
 
+`setup_gateway.sh` also installs Foundry (`forge`) to `/usr/local/share/foundry`
+and symlinks it into `/usr/local/bin`, so `forge` is on `PATH` for every user.
+
 ---
 
 ### Step 2 — Deploy the smart contract
 
-Foundry (`forge`) is installed by `setup_gateway.sh` and compiles natively on
-ARM64. For ARM64 deployment, **do not use `py-solc-x` (strategy A)**
+`deploy_contract.py` compiles and deploys via Foundry's `forge`. As a sanity check,
+if `forge` isn't found on `PATH`, the script prints install instructions and exits.
 
 ```bash
 cd /opt/firmware-gateway
 source venv/bin/activate
-python deploy_contract.py --strategy B      # B = Foundry (default, ARM64-native)
+python deploy_contract.py
 ```
 
 Copy the printed `CONTRACT_ADDRESS` into `.env`, then restart the gateway:
@@ -237,8 +240,10 @@ Home Assistant
 ## Performance Measurements
 
 Performance measurements are done with `simulate_lifecycle.sh` Bash script to verify the feasibility of
+the stack.
 How to use:
-1. Make the original and rogue firmware samples available (you can simply add unexecuted comments inside the rogue one to make it distinct from the original) and note the directory of those files
+1. Make the original and rogue firmware samples available (you can simply add unexecuted comments inside
+the rogue one to make it distinct from the original) and note the directory of those files.
 2. Start the gateway (`sudo systemctl start gateway`) if not already running.
 3. Run the script:
 ```bash
@@ -257,4 +262,4 @@ Example results available in `results` folder.
 ## Acknowledgements
 
 This project is based on prior work of [MostaqHossain/firmware-blockchain](https://github.com/MostaqHossain/firmware-blockchain)
-and vibe-coded with the assistance of Claude Code.
+and vibe-coded with the assistance of Claude.

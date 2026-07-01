@@ -59,7 +59,7 @@ def main():
     fw_hash = sha256_file(args.firmware)
     print(f"      SHA-256: {fw_hash}")
 
-    print(f"[2/3] Registering on-chain via {args.gateway}...")
+    print(f"[2/3] Registering on-chain via {args.gateway}")
     try:
         result = register(args.gateway, args.device_id, fw_hash, args.version)
     except Exception as e:
@@ -67,14 +67,14 @@ def main():
         sys.exit(1)
 
     tx = result.get("tx_hash", "")
-    print(f"      ✅ Registered! tx_hash: {tx}")
+    print(f"Firmware Registered! tx_hash: {tx}")
     print(f"\n[3/3] Summary:")
-    print(f"      device_id : {args.device_id}")
-    print(f"      version   : {args.version}")
-    print(f"      fw_hash   : {fw_hash}")
-    print(f"      tx_hash   : {tx}")
-    print(f"\n👉  View on Sepolia Etherscan:")
-    print(f"    https://sepolia.etherscan.io/tx/{tx}")
+    print(f"device_id : {args.device_id}")
+    print(f"version   : {args.version}")
+    print(f"fw_hash   : {fw_hash}")
+    print(f"tx_hash   : {tx}")
+    print(f"\nView on Sepolia Etherscan:")
+    print(f"https://sepolia.etherscan.io/tx/{tx}")
 
 
 if __name__ == "__main__":
