@@ -18,7 +18,7 @@ echo "      Raspberry Pi OS (64-bit)      "
 echo "════════════════════════════════════"
 
 # 1. System update & packages
-echo "[1/7] Updating system and installing packages..."
+echo "[1/8] Updating system and installing packages..."
 apt-get update -qq
 apt-get install -y --no-install-recommends \
   mosquitto mosquitto-clients \
@@ -26,7 +26,7 @@ apt-get install -y --no-install-recommends \
   git curl
 
 # 2. Mosquitto MQTT broker
-echo "[2/7] Configuring Mosquitto..."
+echo "[2/8] Configuring Mosquitto..."
 cat > /etc/mosquitto/conf.d/firmware-gw.conf << 'EOF'
 listener 1883
 allow_anonymous true
@@ -40,11 +40,11 @@ systemctl restart mosquitto
 echo "Mosquitto running on port 1883"
 
 # 3. Create service user
-echo "[3/7] Creating service user '$SERVICE_USER'..."
+echo "[3/8] Creating service user '$SERVICE_USER'..."
 id "$SERVICE_USER" &>/dev/null || useradd -r -s /sbin/nologin "$SERVICE_USER"
 
 # 4. Install gateway application
-echo "[4/7] Installing gateway application to $GATEWAY_DIR..."
+echo "[4/8] Installing gateway application to $GATEWAY_DIR..."
 mkdir -p "$GATEWAY_DIR"
 cp -r "$(dirname "$0")/../gateway/"* "$GATEWAY_DIR/"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$GATEWAY_DIR"
@@ -56,7 +56,7 @@ python3 -m venv "$GATEWAY_DIR/venv"
 echo "      Python venv ready"
 
 # 5. Environment file
-echo "[5/7] Creating environment template..."
+echo "[5/8] Creating environment template..."
 mkdir -p "$DB_DIR"
 chown "$SERVICE_USER:$SERVICE_USER" "$DB_DIR"
 
@@ -87,7 +87,7 @@ else
 fi
 
 # 6. Systemd service
-echo "[6/7] Installing systemd service..."
+echo "[6/8] Installing systemd service..."
 cat > /etc/systemd/system/firmware-gateway.service << SVCEOF
 [Unit]
 Description=Firmware Blockchain Integrity Gateway
