@@ -1,4 +1,4 @@
-# firmware-blockchain-iot
+# FirmChain
 
 Blockchain-enabled firmware integrity verification for IoT infrastructure,
 extending the [MostaqHossain/firmware-blockchain](https://github.com/MostaqHossain/firmware-blockchain)
