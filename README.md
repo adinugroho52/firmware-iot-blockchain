@@ -11,29 +11,7 @@ proof-of-concept into a real deployment.
 
 ## Architecture
 
-```
-┌──────────────────── ─┐        MQTT         ┌──────────────────────────────────┐
-│   ESP32 (MicroPy)   │ ──── iot/sensors ──► │    Raspberry Pi 5 Gateway        │
-│                     │ ── iot/integrity ──► │                                  │
-│  • DHT22 sensor     │ ◄─ iot/verify_result │  Mosquitto MQTT broker           │
-│  • SHA-256 self-hash│ ◄── iot/ota/<id> ──  │  FastAPI REST :8000              │
-│  • OTA via MQTT     │                      │  Web dashboard (served at /)     │
-└─────────────────────┘                      │  web3.py → Infura → Sepolia      │
-                                             │  SQLite audit log                │
-                                             └──────────┬───────────────────────┘
-                                                        │
-                                             ┌──────────▼───────────────────────┐
-                                             │      Home Assistant Server       │
-                                             │  MQTT + REST sensors             │
-                                             │  Template binary sensor          │
-                                             │  Tamper alert automation         │
-                                             └──────────┬───────────────────────┘
-                                                        │
-                                             ┌──────────▼───────────────────────┐
-                                             │  Ethereum Sepolia Testnet        │
-                                             │  FirmwareIntegrity.sol           │
-                                             └──────────────────────────────────┘
-```
+![Architecture](assets/arch.png)
 
 ---
 
@@ -188,6 +166,12 @@ homeassistant:
 ```
 
 Go to **Developer Tools → Check Configuration**, then restart HA.
+
+---
+
+## Screenshot
+
+![Screenshot](assets/ss.png)
 
 ---
 
